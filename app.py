@@ -1,59 +1,78 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
-# Title for the Food Delivery Application
-st.set_page_config(page_title="Food Delivery Time Estimator", layout="wide")
-st.title("🚚 Food Delivery Use Case Analysis")
+# Page configuration
+st.set_page_config(page_title="Food Delivery Analytics", layout="wide")
 
-# Load the dataset from the sources provided
-# Note: Ensure "Food_Delivery_Times.csv" is in the same directory on GitHub
 @st.cache_data
-def load_data():
-    df = pd.read_csv("Food_Delivery_Times.csv")
-    return df
+def load_and_clean_data():
+    # Attempt to load the dataset
+    try:
+        df = pd.read_csv("Food_Delivery_Times.csv")
+        
+        # Data Cleaning based on source observations:
+        # 1. Strip any leading/trailing spaces from column names
+        df.columns = df.columns.str.strip()
+        
+        # 2. Handle missing values found in sources (e.g., rows 313, 549, 939) [1-3]
+        # We fill categorical NAs with 'Unknown' and numerical with the median
+        df['Weather'] = df['Weather'].fillna('Unknown')
+        df['Traffic_Level'] = df['Traffic_Level'].fillna('Unknown')
+        df['Time_of_Day'] = df['Time_of_Day'].fillna('Unknown')
+        df['Courier_Experience_yrs'] = df['Courier_Experience_yrs'].fillna(df['Courier_Experience_yrs'].median())
+        
+        return df
+    except FileNotFoundError:
+        return None
 
-try:
-    df = load_data()
-    st.sidebar.header("Filter/Input Order Details")
+df = load_and_clean_data()
 
-    # Feature inputs based on source data categories
-    # Weather conditions found in sources: Windy, Clear, Foggy, Rainy, Snowy [1], [2], [4]
-    weather_options = ["Clear", "Rainy", "Windy", "Foggy", "Snowy"]
+st.title("🚚 Food Delivery Time Analysis")
+
+if df is not None:
+    # Sidebar filters using categories identified in the sources [1]
+    st.sidebar.header("Filter Deliveries")
     
-    # Traffic levels found in sources: Low, Medium, High [1], [5]
-    traffic_options = ["Low", "Medium", "High"]
+    # Weather options: Windy, Clear, Foggy, Rainy, Snowy [1]
+    weather_list = sorted(df['Weather'].unique().tolist())
+    weather = st.sidebar.selectbox("Select Weather", weather_list)
     
-    # Time of day options: Afternoon, Evening, Night, Morning [1], [6]
-    time_options = ["Morning", "Afternoon", "Evening", "Night"]
+    # Traffic levels: Low, Medium, High [1]
+    traffic_list = sorted(df['Traffic_Level'].unique().tolist())
+    traffic = st.sidebar.selectbox("Traffic Level", traffic_list)
     
-    # Vehicle types: Scooter, Bike, Car [1], [2], [3]
-    vehicle_options = ["Bike", "Scooter", "Car"]
+    # Vehicle types: Scooter, Bike, Car [1]
+    vehicle_list = sorted(df['Vehicle_Type'].unique().tolist())
+    vehicle = st.sidebar.selectbox("Vehicle Type", vehicle_list)
 
-    # Sidebar UI Elements
-    distance = st.sidebar.slider("Distance (km)", 0.5, 20.0, 5.0) # Distances range up to ~19.9km [7]
-    weather = st.sidebar.selectbox("Weather Condition", weather_options)
-    traffic = st.sidebar.selectbox("Traffic Level", traffic_options)
-    time_of_day = st.sidebar.selectbox("Time of Day", time_options)
-    vehicle = st.sidebar.selectbox("Vehicle Type", vehicle_options)
-    prep_time = st.sidebar.number_input("Preparation Time (min)", 5, 30, 15) # Prep times range up to 29 min [8]
-    experience = st.sidebar.number_input("Courier Experience (yrs)", 0, 10, 5) # Experience ranges up to 9 yrs [9]
+    # Filtered View
+    filtered_df = df[
+        (df['Weather'] == weather) & 
+        (df['Traffic_Level'] == traffic) & 
+        (df['Vehicle_Type'] == vehicle)
+    ]
 
-    # Display basic metrics or filtered data
-    st.subheader("Dataset Overview")
-    st.write("This application draws insights from delivery logs including order IDs and various environmental factors.") [1]
-    st.dataframe(df.head(10))
+    # Metrics Display
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Trips in Category", len(filtered_df))
+    with col2:
+        avg_time = filtered_df['Delivery_Time_min'].mean() if not filtered_df.empty else 0
+        st.metric("Avg Delivery Time", f"{avg_time:.1f} mins")
+    with col3:
+        avg_dist = filtered_df['Distance_km'].mean() if not filtered_df.empty else 0
+        st.metric("Avg Distance", f"{avg_dist:.1f} km")
 
-    # Simple logic to show average delivery time based on selected filters
-    st.subheader("Delivery Insight")
-    filtered_df = df[(df['Weather'] == weather) & (df['Traffic_Level'] == traffic)]
-    
+    # Historical Data Table
+    st.subheader(f"Historical Logs: {weather} Weather / {traffic} Traffic")
     if not filtered_df.empty:
-        avg_time = filtered_df['Delivery_Time_min'].mean()
-        st.success(f"Average Delivery Time for {weather} weather with {traffic} traffic: **{avg_time:.2f} minutes**")
+        st.dataframe(filtered_df[['Order_ID', 'Distance_km', 'Time_of_Day', 'Delivery_Time_min']])
     else:
-        st.warning("No historical data found for this specific combination. Showing global average.")
-        st.info(f"Global Average Delivery Time: **{df['Delivery_Time_min'].mean():.2f} minutes**")
+        st.info("No records match these exact criteria in the source data.")
+
+else:
+    st.error("Dataset not found! Please ensure 'Food_Delivery_Times.csv' is in your GitHub repository.")
 
 except FileNotFoundError:
+
     st.error("Please ensure 'Food_Delivery_Times.csv' is uploaded to your GitHub repository.")
