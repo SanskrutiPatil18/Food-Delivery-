@@ -72,7 +72,3 @@ if df is not None:
 
 else:
     st.error("Dataset not found! Please ensure 'Food_Delivery_Times.csv' is in your GitHub repository.")
-
-except FileNotFoundError:
-
-    st.error("Please ensure 'Food_Delivery_Times.csv' is uploaded to your GitHub repository.")
